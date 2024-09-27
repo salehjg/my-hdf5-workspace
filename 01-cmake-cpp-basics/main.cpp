@@ -100,8 +100,142 @@ void test02() {
 
 }
 
+inline H5::DataSpace CreateDataSpaceStringVariableLength() {
+    hsize_t dims[1] = {0};
+    hsize_t maxdims[1] = {H5S_UNLIMITED};
+    H5::DataSpace dataspace(1, dims, maxdims);
+    return dataspace;
+}
+
+void test03() {
+    cout << "\tRunning Test03:" << endl;
+
+    const size_t tensorLen = 100;
+
+    H5::H5File file("test03.h5", H5F_ACC_TRUNC);
+
+    // Create a dataset creation property list and enable chunking
+    H5::DSetCreatPropList prop;
+    hsize_t chunk_dims[1] = {10};
+    prop.setChunk(1, chunk_dims);
+
+    // Create a dataspace with unlimited dimensions
+    hsize_t dims[1] = {tensorLen};
+    hsize_t maxdims[1] = {H5S_UNLIMITED};
+    H5::DataSpace dataspace(1, dims, maxdims);
+
+    // Create tensors
+    std::vector<H5::Group> tensors = {file.createGroup("GroupTnId0"), file.createGroup("GroupTnId1")};
+
+    H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE);
+
+    // Create a dataset called "ExprSEs" of type string
+    for (auto& tn : tensors) {
+        auto dataset = tn.createDataSet("ExprSEs", strdatatype, dataspace, prop);
+
+        // We can get the dataset this way too:
+        //H5::DataSet dataset = tn.openDataSet("ExprSEs");
+
+
+        for (int i = 0; i < tensorLen; i++) {
+            // get the dataset "ExprSEs"
+            dataset.write("expr" + std::to_string(i), strdatatype);
+        }
+    }
+
+    for (auto& tn : tensors) {
+        auto gStates = tn.createGroup("GroupStates");
+        auto gFirsts = gStates.createGroup("GroupPairFirsts");
+        auto gSeconds = gStates.createGroup("GroupPairSeconds");
+
+        for (int i = 0; i < tensorLen; i++) {
+            auto dSet = gFirsts.createDataSet("flat" + std::to_string(i), H5::StrType(H5::PredType::C_S1, H5T_VARIABLE), dataspace, prop);
+            for (int j = 0; j < 3; j++) {
+                dSet.write("stateExpr" + std::to_string(j), H5::StrType(H5::PredType::C_S1, H5T_VARIABLE));
+            }
+
+            auto dSet2 = gSeconds.createDataSet("flat" + std::to_string(i), H5::StrType(H5::PredType::C_S1, H5T_VARIABLE), dataspace, prop);
+            for (int j = 0; j < 3; j++) {
+                dSet2.write("combs" + std::to_string(j), H5::StrType(H5::PredType::C_S1, H5T_VARIABLE));
+            }
+        }
+
+        // create the following attributes for `tn`: {"tnName": "foo", "tnLen": 1234}
+        H5::Attribute attr = tn.createAttribute("tnName", H5::StrType(H5::PredType::C_S1, H5T_VARIABLE), dataspace);
+        attr.write(H5::StrType(H5::PredType::C_S1, H5T_VARIABLE), "foo");
+
+        H5::Attribute attr2 = tn.createAttribute("tnLen", H5::PredType::NATIVE_INT, H5::DataSpace(H5S_SCALAR));
+        int tnLen = 1234;
+        attr2.write(H5::PredType::NATIVE_INT, &tnLen);
+    }
+
+    file.flush(H5F_SCOPE_LOCAL);
+    file.close();
+}
+
+void test04() {
+    // Initialize the vector of strings
+    std::vector<std::string> strings = {"len1", "len1", "len1"};
+
+    // Create a new HDF5 file
+    H5::H5File file("test04.h5", H5F_ACC_TRUNC);
+
+    // Define the datatype for the string dataset
+    H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE);
+
+    // Define the dataspace for the dataset
+    hsize_t dims[1] = {strings.size()};
+    H5::DataSpace dataspace(1, dims);
+
+    // Create the dataset
+    H5::DataSet dataset = file.createDataSet("strings_dataset", strdatatype, dataspace);
+
+    // Write the data to the dataset
+    dataset.write(strings[0], strdatatype);
+    dataset.write(strings[1], strdatatype);
+    dataset.write(strings[2], strdatatype);
+}
+
+void test05() {
+    // Initialize the vector of strings
+    std::vector<std::string> strings = {"str1", "str22", "str333", "str4444", "str55555", "str666666", "str7", "str8", "str9", "str10"};
+
+    // Create a new HDF5 file
+    H5::H5File file("strings.h5", H5F_ACC_TRUNC);
+
+    // Define the dimensions of the dataspace
+    hsize_t dims[1] = {strings.size()};
+
+    // Create a simple dataspace with the specified dimensions
+    H5::DataSpace dataspace(1, dims);
+
+    // Define the datatype for the string dataset
+    H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE);
+
+    // Create the dataset
+    H5::DataSet dataset = file.createDataSet("strings_dataset", strdatatype, dataspace);
+
+    for (int i = 0; i < strings.size(); i++) {
+        // Select the hyperslab for the current element
+        hsize_t offset[1] = {static_cast<hsize_t>(i)};
+        hsize_t count[1] = {1};
+        dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);
+        H5::DataSpace memspace(1, count);
+
+        dataset.write(strings[i], strdatatype, memspace, dataspace);
+    }
+
+    // It seems that without hyperslab selection, a single call to dataset.write() should write all the elements of the dataset in one go.
+    // If called one by one without hyperslab selection, it crashes with SIGSEV.
+
+}
+
+
 int main() {
     cout << "Running 01-cmake-cpp-basics" << endl;
-    test01();
-    test02();
+    //test01();
+    //test02();
+    //test03();
+    //test04();
+    test05();
 }
