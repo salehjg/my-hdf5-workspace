@@ -361,6 +361,10 @@ void DatasetWrite2(H5::H5File &file, const std::string &datasetPath, size_t data
     //H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE);
     H5::VarLenType vlenDatatype(H5::PredType::NATIVE_CHAR);
 
+    /**
+    - serialized symengine expr string could contain termination char mid string.This is data, but HDF5 treats it as a terminator.
+    - std::string::size() returns the size of the first substring to the first terminator. So we have to use sizeof(std::string::data()) instead.
+     */
     hvl_t varLenData;
     varLenData.p = (void *)data.data();
     varLenData.len = sizeof(data.data());
