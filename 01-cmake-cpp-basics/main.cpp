@@ -346,8 +346,26 @@ void DatasetWrite(H5::DataSet& dataset, size_t datasetSize, size_t index, const 
     H5::DataSpace dataspace(1, dims);
     dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);
     H5::DataSpace memspace(1, count);
-    H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE);
-    dataset.write(data, strdatatype, memspace, dataspace);
+    //H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE);
+    H5::VarLenType vlenDatatype(H5::PredType::NATIVE_CHAR);
+    dataset.write(data, vlenDatatype, memspace, dataspace);
+}
+void DatasetWrite2(H5::H5File &file, const std::string &datasetPath, size_t datasetSize, size_t index, const std::string& data) {
+    auto dset = file.openDataSet(datasetPath);
+    hsize_t offset[1] = {index};
+    hsize_t count[1] = {1}; // 1 element
+    hsize_t dims[1] = {datasetSize};
+    H5::DataSpace dataspace(1, dims);
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);
+    H5::DataSpace memspace(1, count);
+    //H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE);
+    H5::VarLenType vlenDatatype(H5::PredType::NATIVE_CHAR);
+
+    hvl_t varLenData;
+    varLenData.p = (void *)data.data();
+    varLenData.len = sizeof(data.data());
+
+    dset.write(&varLenData, vlenDatatype, memspace, dataspace);
 }
 
 H5::DataSet DatasetCreateStringVariableLen(H5::H5File& file,
@@ -355,8 +373,9 @@ H5::DataSet DatasetCreateStringVariableLen(H5::H5File& file,
                                     size_t datasetSize) {
     hsize_t dims[1] = {datasetSize};
     H5::DataSpace dataspace(1, dims);
-    H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE);
-    return file.createDataSet(path, strdatatype, dataspace);
+    //H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE);
+    H5::VarLenType vlenDatatype(H5::PredType::NATIVE_CHAR);
+    return file.createDataSet(path, vlenDatatype, dataspace);
 }
 
 void test08() {
@@ -374,19 +393,68 @@ void test08() {
     file.createGroup("tensors");
     auto dataset = DatasetCreateStringVariableLen(file, "tensors/dset1", 10);
 
-    DatasetWrite(dataset, 10, 0, "string0");
-    DatasetWrite(dataset, 10, 1, "string11");
-    DatasetWrite(dataset, 10, 2, "string222");
-    DatasetWrite(dataset, 10, 3, "string3333");
-    DatasetWrite(dataset, 10, 4, "string44444");
-    DatasetWrite(dataset, 10, 5, "string555555");
-    DatasetWrite(dataset, 10, 6, "string6666666");
-    DatasetWrite(dataset, 10, 7, "string77777777");
-    DatasetWrite(dataset, 10, 8, "string888888888");
-    DatasetWrite(dataset, 10, 9, "string9999999999");
+    DatasetWrite2(file, "tensors/dset1", 10, 0, "Hello\0World");
+    DatasetWrite2(file, "tensors/dset1", 10, 1, "string11");
+    DatasetWrite2(file, "tensors/dset1", 10, 2, "string222");
+    DatasetWrite2(file, "tensors/dset1", 10, 3, "string3333");
+    DatasetWrite2(file, "tensors/dset1", 10, 4, "string44444");
+    DatasetWrite2(file, "tensors/dset1", 10, 5, "string555555");
+    DatasetWrite2(file, "tensors/dset1", 10, 6, "string6666666");
+    DatasetWrite2(file, "tensors/dset1", 10, 7, "string77777777");
+    DatasetWrite2(file, "tensors/dset1", 10, 8, "string888888888");
+    DatasetWrite2(file, "tensors/dset1", 10, 9, "string9999999999");
 
 
     file.close();
+}
+
+#include "H5Cpp.h"
+#include <vector>
+
+int test09() {
+    // File and group creation
+    H5::H5File file("/tmp/test09.h5", H5F_ACC_TRUNC);
+    H5::Group group = file.createGroup("/my_group");
+
+    // Define the datatype for the data in the file (variable-length byte array)
+    H5::VarLenType vlenDatatype(H5::PredType::NATIVE_CHAR);
+
+    // Define the size of the dataset (1D array with 2 elements)
+    hsize_t dims[1] = {2};
+    H5::DataSpace dataspace(1, dims);
+
+    // Create the dataset
+    H5::DataSet dataset = group.createDataSet("my_dataset", vlenDatatype, dataspace);
+
+    // Prepare variable-length data
+    std::vector<uint8_t> data0(32, 0x01); // 32 bytes of value 0x01
+    std::vector<uint8_t> data1(35, 0x02); // 35 bytes of value 0x02
+
+    // Create HDF5 variable-length data structures
+    hvl_t vl_data[2];
+    vl_data[0].p = data0.data();
+    vl_data[0].len = data0.size();
+    vl_data[1].p = data1.data();
+    vl_data[1].len = data1.size();
+
+    // Write the variable-length data to the dataset
+    dataset.write(vl_data, vlenDatatype);
+
+    // select the offset of dataset and write the data to it
+    hsize_t offset[1] = {1};
+    hsize_t count[1] = {1};
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);
+    dataset.write(vl_data + 1, vlenDatatype, dataspace);
+
+
+
+
+    // Close the dataset and file
+    dataset.close();
+    group.close();
+    file.close();
+
+    return 0;
 }
 
 int main() {
@@ -399,4 +467,5 @@ int main() {
     //test06();
     //test07();
     test08();
+    //test09();
 }
