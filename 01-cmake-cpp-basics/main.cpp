@@ -2,6 +2,7 @@
 // Created by saleh on 9/26/24.
 //
 
+#include <algorithm>
 #include <iostream>
 #include <vector>
 #include <map>
@@ -350,7 +351,7 @@ void DatasetWrite(H5::DataSet& dataset, size_t datasetSize, size_t index, const 
     H5::VarLenType vlenDatatype(H5::PredType::NATIVE_CHAR);
     dataset.write(data, vlenDatatype, memspace, dataspace);
 }
-void DatasetWrite2(H5::H5File &file, const std::string &datasetPath, size_t datasetSize, size_t index, const std::string& data) {
+void DatasetWrite2(H5::H5File &file, const std::string &datasetPath, size_t datasetSize, size_t index, const char *data, size_t dataLen) {
     auto dset = file.openDataSet(datasetPath);
     hsize_t offset[1] = {index};
     hsize_t count[1] = {1}; // 1 element
@@ -366,10 +367,25 @@ void DatasetWrite2(H5::H5File &file, const std::string &datasetPath, size_t data
     - std::string::size() returns the size of the first substring to the first terminator. So we have to use sizeof(std::string::data()) instead.
      */
     hvl_t varLenData;
-    varLenData.p = (void *)data.data();
-    varLenData.len = sizeof(data.data());
+    varLenData.p = (void *)data;
+    varLenData.len = dataLen;
 
     dset.write(&varLenData, vlenDatatype, memspace, dataspace);
+}
+
+hvl_t DatasetRead2(H5::H5File &file, const std::string &datasetPath, size_t datasetSize, size_t index) {
+    auto dset = file.openDataSet(datasetPath);
+    hsize_t offset[1] = {index};
+    hsize_t count[1] = {1}; // 1 element
+    hsize_t dims[1] = {datasetSize};
+    H5::DataSpace dataspace(1, dims);
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);
+    H5::DataSpace memspace(1, count);
+    H5::VarLenType vlenDatatype(H5::PredType::NATIVE_CHAR);
+
+    hvl_t varLenData;
+    dset.read(&varLenData, vlenDatatype, memspace, dataspace);
+    return varLenData;
 }
 
 H5::DataSet DatasetCreateStringVariableLen(H5::H5File& file,
@@ -397,17 +413,26 @@ void test08() {
     file.createGroup("tensors");
     auto dataset = DatasetCreateStringVariableLen(file, "tensors/dset1", 10);
 
-    DatasetWrite2(file, "tensors/dset1", 10, 0, "Hello\0World");
-    DatasetWrite2(file, "tensors/dset1", 10, 1, "string11");
-    DatasetWrite2(file, "tensors/dset1", 10, 2, "string222");
-    DatasetWrite2(file, "tensors/dset1", 10, 3, "string3333");
-    DatasetWrite2(file, "tensors/dset1", 10, 4, "string44444");
-    DatasetWrite2(file, "tensors/dset1", 10, 5, "string555555");
-    DatasetWrite2(file, "tensors/dset1", 10, 6, "string6666666");
-    DatasetWrite2(file, "tensors/dset1", 10, 7, "string77777777");
-    DatasetWrite2(file, "tensors/dset1", 10, 8, "string888888888");
-    DatasetWrite2(file, "tensors/dset1", 10, 9, "string9999999999");
+    DatasetWrite2(file, "tensors/dset1", 10, 0, "Hello\0World", 12);
+    DatasetWrite2(file, "tensors/dset1", 10, 1, "string11", 8);
+    DatasetWrite2(file, "tensors/dset1", 10, 2, "string222", 9);
+    DatasetWrite2(file, "tensors/dset1", 10, 3, "string3333", 10);
+    DatasetWrite2(file, "tensors/dset1", 10, 4, "string44444", 11);
+    DatasetWrite2(file, "tensors/dset1", 10, 5, "string555555", 12);
+    DatasetWrite2(file, "tensors/dset1", 10, 6, "string6666666", 13);
+    DatasetWrite2(file, "tensors/dset1", 10, 7, "string77777777", 14);
+    DatasetWrite2(file, "tensors/dset1", 10, 8, "string888888888", 15);
+    DatasetWrite2(file, "tensors/dset1", 10, 9, "string9999999999", 16);
 
+
+    auto data = DatasetRead2(file, "tensors/dset1", 10, 0);
+
+    // compare each element of data.p with the char array Hello\0World
+    cout << "data.len: " << data.len << endl;
+    cout << "data.p: " << endl;
+    for (int i = 0; i < 12; i++) {
+        cout << ((char*)data.p)[i];
+    }
 
     file.close();
 }
